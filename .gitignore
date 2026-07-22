@@ -1,0 +1,40 @@
+# ── Virtual environments ────────────────────────────────────────────────────────
+.venv/
+myenv/
+venv/
+.python_packages/
+
+# ── Python cache ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ── Environment / secrets ───────────────────────────────────────────────────────
+# Never commit secrets — copy local.settings.json.example and .env.example
+.env
+local.settings.json
+
+# ── AI assistant internal files ─────────────────────────────────────────────────
+# These are AI coding-assistant context files — not part of the public codebase
+CLAUDE.md
+OPEN_QUESTIONS.md
+.claude/
+
+# ── Editor / IDE ────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.sw?
+
+# ── OS junk ────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs ───────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Misc ───────────────────────────────────────────────────────────────────────
+.github/
+foo.py

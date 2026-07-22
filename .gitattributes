@@ -1,0 +1,23 @@
+# Handle line endings automatically
+* text=auto
+
+# Python files — always LF
+*.py text eol=lf
+
+# JSON/YAML — always LF
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Markdown — always LF
+*.md text eol=lf
+
+# Windows batch files — always CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binaries — no conversion
+*.xlsx binary
+*.png binary
+*.jpg binary
+*.ico binary

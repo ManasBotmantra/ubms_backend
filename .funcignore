@@ -1,0 +1,23 @@
+# Python environments
+.venv
+venv
+myenv
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+__pycache__
+
+# Ignore build artifacts
+.python_packages/
+.python_packages
+
+# Editor or CI/CD folders
+.vscode/
+.github/
+.vscode
+.github
+
+# Local scripts not meant for deployment
+foo.py

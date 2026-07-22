@@ -1,0 +1,45 @@
+{
+  "bill_type": null,
+  "utility_provider": null,
+  "consumer_details": {
+    "consumer_number": null,
+    "rr_number": null,
+    "consumer_name": null,
+    "address": null,
+    "division": null,
+    "sub_division": null,
+    "tariff_category": null,
+    "sanctioned_load_kw": null,
+    "phase": null
+  },
+  "meter_details": {
+    "meter_number": null,
+    "meter_type": null
+  },
+  "billing_period": {
+    "from_date": null,
+    "to_date": null,
+    "bill_date": null,
+    "due_date": null
+  },
+  "consumption": {
+    "previous_reading": null,
+    "current_reading": null,
+    "multiplying_factor": null,
+    "units_consumed_kwh": null
+  },
+  "charges": {
+    "fixed_charge": null,
+    "energy_charge": null,
+    "fuel_adjustment_charge": null,
+    "electricity_duty": null,
+    "meter_rent": null,
+    "tax_on_sale": null,
+    "interest_on_delayed_payment": null
+  },
+  "arrears": null,
+  "current_bill_amount": null,
+  "total_amount_payable": null,
+  "currency": null,
+  "payment_status": null
+}
