@@ -12,11 +12,11 @@ load_dotenv()
 # Database
 # ------------------------------------------------------------------------------
 SCHEMANAME = os.environ.get("SCHEMANAME", "public")
-DB_HOST = os.environ.get("DB_HOST", "localhost")
-DB_PORT = os.environ.get("DB_PORT", "5432")
-DB_NAME = os.environ.get("DB_NAME", "")
-DB_USER = os.environ.get("DB_USER", "")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
+DB_HOST = os.environ.get("DB_HOST_BM", "localhost")
+DB_PORT = os.environ.get("DB_PORT_BM", "5432")
+DB_NAME = os.environ.get("DB_NAME_BM", "")
+DB_USER = os.environ.get("DB_USER_BM", "")
+DB_PASSWORD = os.environ.get("DB_PASSWORD_BM", "")
 
 # ------------------------------------------------------------------------------
 # Authentication (OAuth2-style access/refresh tokens -- see common_functions/auth.py)
