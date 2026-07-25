@@ -124,6 +124,11 @@ ERR_REFRESH_TOKEN_INVALID_OR_EXPIRED = "invalid or expired refresh token"
 ERR_INVALID_CREDENTIALS = "invalid credentials"
 ERR_USER_NOT_ACTIVE = "user not active"
 ERR_ROLE_NOT_PERMITTED = "role not permitted"
+# OAuth scope failure. Distinct from ERR_ROLE_NOT_PERMITTED on purpose: the role
+# check answers "is this user allowed to do this at all?", while this answers
+# "did this particular token ask for enough access?". A read-only agent token
+# held by an Administrator hits this one, not the role check.
+ERR_INSUFFICIENT_SCOPE = "insufficient scope for this operation"
 ERR_NO_RECORD_FOUND = "no record found"
 ERR_NO_DATA_FOUND = "no data found"
 ERR_NO_ACTIVE_SESSION_FOUND = "no active session found"

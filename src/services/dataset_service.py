@@ -34,6 +34,11 @@ def _get_nested(data: dict, dot_path: str):
 # YYYY-MM-01, would get corrupted on every single value: "2026-04-01" -> "2026-01-04").
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
+# Mirrors duckdb_engine._SAFE_DATASET_ID_RE. dataset_id is caller-supplied and gets
+# interpolated into filesystem paths, so anything with a path separator or a dot is
+# rejected outright rather than sanitised.
+_SAFE_DATASET_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
 
 class DatasetService(IDatasetService):
     def __init__(
@@ -292,6 +297,12 @@ class DatasetService(IDatasetService):
         return dfs
 
     async def get_metadata(self, dataset_id: str) -> DatasetMetadata:
+        # dataset_id arrives from the request body and is interpolated into a path,
+        # so it must be shape-checked before use or "../" escapes db_dir and turns
+        # this into an arbitrary-file read.
+        if not isinstance(dataset_id, str) or not _SAFE_DATASET_ID_RE.match(dataset_id):
+            raise DatasetNotFoundError("Invalid dataset_id.")
+
         meta_path = self.db_engine.db_dir / f"{dataset_id}.meta.json"
         if not meta_path.exists():
             raise DatasetNotFoundError(f"Metadata for dataset {dataset_id} not found.")

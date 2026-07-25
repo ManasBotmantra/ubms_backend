@@ -14,6 +14,16 @@ _SENSITIVE_KEYS = {
     "token",
     "access_token",
     "refresh_token",
+    # OAuth credentials. These are every bit as sensitive as a password: an
+    # authorization code plus its verifier can be exchanged for an access token, and
+    # a client_secret authenticates the client. They were previously written to
+    # audit_log in plaintext by the /oauth/token handler, and audit_log is itself
+    # readable through filter_audit_log.
+    "code",
+    "code_verifier",
+    "client_secret",
+    "client_assertion",
+    "assertion",
     # PII: not a credential, but audit_log is a second place this data would otherwise sit
     # in plaintext (backups, exports, or a future role change granting broader read access).
     "full_name",

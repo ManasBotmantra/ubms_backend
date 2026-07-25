@@ -1,0 +1,128 @@
+-- ============================================================================
+-- OAuth 2.0 Authorization Server — schema notes & client registration
+-- ============================================================================
+-- VERIFIED against the UAT database (botiquat / UBMS / public) on 25-Jul-2026
+-- by read-only inspection.
+--
+-- STATUS: oauth_clients and oauth_auth_codes ALREADY EXIST and their columns
+--         match what the code requires. No table creation is needed.
+--
+--         What IS needed: oauth_clients is EMPTY (0 rows). The hardened code
+--         rejects any client_id that is not registered, so OAuth will refuse
+--         every request until at least one client row exists. See section 2.
+-- ============================================================================
+
+
+-- ============================================================================
+-- 1. Actual live schema (for reference — do not re-run)
+-- ============================================================================
+-- oauth_clients
+--   client_id           varchar(64)   NOT NULL  PRIMARY KEY
+--   client_secret_hash  varchar(255)  NULL       -- SHA-256 hex (64 chars); NULL = public client
+--   client_name         varchar(100)  NOT NULL   -- shown on the consent screen
+--   redirect_uris       text[]        NOT NULL   -- EXACT-match allowlist, no wildcards
+--   grant_types         text[]        NOT NULL   -- authorization_code | password | refresh_token
+--   created_at          timestamptz   NULL
+--   is_active           boolean       NULL       -- code requires is_active = TRUE
+--
+-- oauth_auth_codes
+--   code_id                varchar(64)  NOT NULL PRIMARY KEY  -- "code_" + uuid4 hex = 37 chars
+--   client_id              varchar(64)  NOT NULL  FK -> oauth_clients(client_id) ON DELETE CASCADE
+--   user_id                uuid         NOT NULL
+--   redirect_uri           text         NOT NULL
+--   scope                  text         NULL
+--   code_challenge         varchar(128) NOT NULL  -- S256 challenge is 43 chars
+--   code_challenge_method  varchar(10)  NOT NULL
+--   expires_at             timestamptz  NOT NULL
+--   used_at                timestamptz  NULL      -- NULL until redeemed (single-use)
+--   created_at             timestamptz  NULL
+
+
+-- ============================================================================
+-- 2. REQUIRED: register at least one client
+-- ============================================================================
+-- Without this, /oauth/authorize and /oauth/token reject everything with
+-- "Unknown or inactive client_id". This is deliberate — the previous code fell
+-- back to a built-in client that accepted ANY redirect_uri, which was the
+-- account-takeover vulnerability.
+--
+-- Public client (no secret) — browser / desktop / MCP agent. Protected by
+-- mandatory PKCE plus exact redirect_uri matching.
+--
+--   INSERT INTO oauth_clients
+--       (client_id, client_secret_hash, client_name, redirect_uris, grant_types, is_active)
+--   VALUES (
+--       'mcp_copilot_client',
+--       NULL,
+--       'Copilot / MCP Agent',
+--       ARRAY['https://app.example.com/oauth/callback'],   -- EXACT callback URL(s)
+--       ARRAY['authorization_code', 'refresh_token'],
+--       TRUE
+--   );
+--
+-- Confidential client (with a secret) — server-side app. Generate and hash:
+--
+--   python -c "import secrets,hashlib; s=secrets.token_urlsafe(32); \
+--     print('secret:', s); print('hash:  ', hashlib.sha256(s.encode()).hexdigest())"
+--
+--   INSERT INTO oauth_clients
+--       (client_id, client_secret_hash, client_name, redirect_uris, grant_types, is_active)
+--   VALUES ('reporting_service', '<hash from above>', 'Reporting Service',
+--           ARRAY['https://reports.example.com/cb'],
+--           ARRAY['authorization_code', 'refresh_token'], TRUE);
+--
+-- Store ONLY the hash. Hand the plaintext secret to the client once.
+--
+-- IMPORTANT — every URL in redirect_uris must be the complete callback address
+-- including scheme, host, port and path. It is compared byte-for-byte. Do not
+-- put '*' in this column.
+
+
+-- ============================================================================
+-- 3. RECOMMENDED: defence-in-depth constraints
+-- ============================================================================
+-- The live tables currently have only primary keys and one foreign key. These
+-- statements add database-level guarantees so that no future code path, script
+-- or manual INSERT can reintroduce the vulnerabilities that were just fixed.
+-- They are safe to run against the existing empty tables.
+--
+-- Reject a wildcard callback address outright:
+--
+--   ALTER TABLE oauth_clients
+--     ADD CONSTRAINT oauth_clients_no_wildcard_redirect
+--     CHECK (NOT ('*' = ANY(redirect_uris)));
+--
+--   ALTER TABLE oauth_clients
+--     ADD CONSTRAINT oauth_clients_redirect_uris_not_empty
+--     CHECK (array_length(redirect_uris, 1) > 0);
+--
+--   ALTER TABLE oauth_auth_codes
+--     ADD CONSTRAINT oauth_auth_codes_no_wildcard_redirect
+--     CHECK (redirect_uri <> '*');
+--
+-- Enforce S256-only PKCE at the database level:
+--
+--   ALTER TABLE oauth_auth_codes
+--     ADD CONSTRAINT oauth_auth_codes_s256_only
+--     CHECK (code_challenge_method = 'S256');
+--
+-- Referential integrity for user_id (currently absent — only client_id has an FK):
+--
+--   ALTER TABLE oauth_auth_codes
+--     ADD CONSTRAINT oauth_auth_codes_user_id_fkey
+--     FOREIGN KEY (user_id) REFERENCES user_master(user_id) ON DELETE CASCADE;
+--
+-- Helpful indexes:
+--
+--   CREATE INDEX IF NOT EXISTS idx_oauth_auth_codes_expires_at
+--     ON oauth_auth_codes (expires_at);
+--   CREATE INDEX IF NOT EXISTS idx_oauth_auth_codes_user_id
+--     ON oauth_auth_codes (user_id);
+
+
+-- ============================================================================
+-- 4. Housekeeping
+-- ============================================================================
+-- Authorization codes live 60 seconds. Purge spent/expired rows periodically:
+--
+--   DELETE FROM oauth_auth_codes WHERE expires_at < now() - INTERVAL '1 day';

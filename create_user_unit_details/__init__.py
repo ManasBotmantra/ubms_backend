@@ -2,9 +2,9 @@
 
 import azure.functions as func
 
-from common_functions.auth import validate_auth_token
+from common_functions.auth import validate_auth_token, token_has_scope, SCOPE_WRITE
 from common_functions.audit import log_api_audit_trail
-from common_functions.response import build_api_response, handle_system_exception
+from common_functions.response import build_api_response, build_insufficient_scope_response, handle_system_exception
 from common_functions import config
 
 from admin_functions.user_unit_details import f_create_user_unit_details
@@ -19,7 +19,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     Request:
         Headers:
             - request_type = application/json
-            - authorize_token = str
+            - Authorization = Bearer <access_token>   (standard; use this for OAuth clients)
+            - authorize_token = str                   (legacy header, still supported)
 
         Body:
         {
@@ -31,15 +32,21 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     Returns:
         JSON response with status_code, status_description, error_message, and data.
     """
-    authorize_token = req.headers.get("authorize_token")
     request_body = {}
     uuid_caller_user_id = None
 
     try:
         # 1. Validate auth token
-        is_valid, uuid_caller_user_id, str_caller_role = validate_auth_token(authorize_token)
+        is_valid, uuid_caller_user_id, str_caller_role = validate_auth_token(req)
         if not is_valid:
             response = build_api_response(config.STATUS_UNAUTHORIZED, config.DESC_UNAUTHORIZED, config.ERR_TOKEN_INVALID_OR_EXPIRED, None)
+            log_api_audit_trail("create_user_unit_details", uuid_caller_user_id, request_body, None, response.status_code)
+            return response
+
+        # 1b. Scope check -- role says WHO may act, scope says how much this
+        #     particular token was granted. A read-only agent token fails here.
+        if not token_has_scope(req, SCOPE_WRITE):
+            response = build_insufficient_scope_response(SCOPE_WRITE)
             log_api_audit_trail("create_user_unit_details", uuid_caller_user_id, request_body, None, response.status_code)
             return response
 
