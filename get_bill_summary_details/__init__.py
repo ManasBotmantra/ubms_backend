@@ -55,6 +55,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         is_valid, uuid_caller_user_id, str_caller_role = validate_auth_token(req)
         if not is_valid:
             response = build_api_response(config.STATUS_UNAUTHORIZED, config.DESC_UNAUTHORIZED, config.ERR_TOKEN_INVALID_OR_EXPIRED, None)
+            response.headers["WWW-Authenticate"] = 'Bearer realm="UBMS", scope="read"'
             log_api_audit_trail("get_bill_summary_details", uuid_caller_user_id, request_body, None, response.status_code)
             return response
 

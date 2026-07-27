@@ -93,6 +93,8 @@ def _parse_redirect_uris(raw) -> list:
         raw = raw.strip()
         if not raw:
             return []
+        if raw.startswith("{") and raw.endswith("}"):
+            raw = raw[1:-1].strip()
         if raw.startswith("["):
             try:
                 parsed = json.loads(raw)
@@ -100,7 +102,7 @@ def _parse_redirect_uris(raw) -> list:
                     return [str(u).strip() for u in parsed if str(u).strip()]
             except ValueError:
                 pass
-        return [part.strip() for part in raw.split(",") if part.strip()]
+        return [part.strip().strip('"\'') for part in raw.split(",") if part.strip().strip('"\'')]
     return []
 
 

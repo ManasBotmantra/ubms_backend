@@ -97,14 +97,14 @@ def f_create_auth_session(str_email, str_password, requested_scopes=None, client
                 """
                 SELECT user_id, password_hash, user_status
                 FROM user_master
-                WHERE LOWER(email) = %s
+                WHERE LOWER(email) = %s AND user_status = 'Active'
                 """,
                 (str_email,),
             )
             user_row = cursor.fetchone()
 
             # 3. Validate credentials
-            if not user_row or user_row["user_status"] != "Active":
+            if not user_row:
                 bcrypt.checkpw(str_password.encode(), _DUMMY_PASSWORD_HASH.encode())
                 return config.STATUS_UNAUTHORIZED, config.DESC_UNAUTHORIZED, config.ERR_INVALID_CREDENTIALS, None
             if not bcrypt.checkpw(str_password.encode(), user_row["password_hash"].encode()):
