@@ -34,7 +34,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 "utility_category_name": "str",
                 "unit_id": "uuid or unit_code",
                 "day_flag":   "Daily|Monthly|Quarterly|Yearly",
-                "day_value":  "DD-MM-YYYY | MM-YYYY | Q1-YYYY | YYYY"
+                "day_value":  "DD-MM-YYYY | MM-YYYY | Q1-YYYY | YYYY",
+                "from_date":  "arbitrary range start, filters bill_date -- mutually exclusive with day_flag",
+                "to_date":    "arbitrary range end, filters bill_date -- mutually exclusive with day_flag"
             },
             "group_by": ["bill_status", "utility_category", "account_id",
                          "billing_period", "month", "quarter", "year",
@@ -83,6 +85,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         uuid_unit_id  = filters.get("unit_id")
         str_day_flag  = filters.get("day_flag")
         str_day_value = filters.get("day_value")
+        str_date_from = filters.get("from_date")
+        str_date_to   = filters.get("to_date")
         list_group_by = request_body.get("group_by") or []
 
         # 3. RBAC check: Administrator only
@@ -101,6 +105,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             uuid_unit_id,
             str_day_flag,
             str_day_value,
+            str_date_from,
+            str_date_to,
             list_group_by,
         )
 

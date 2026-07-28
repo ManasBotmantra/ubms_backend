@@ -301,11 +301,16 @@ def _parse_day_flag(str_day_flag, str_day_value):
 
 
 
-def _bill_where(uuid_account_id, str_bill_status, date_from_date, date_to_date, date_exact_bill_date=None, str_utility_category_name=None, uuid_unit_id=None):
+def _bill_where(
+    uuid_account_id, str_bill_status, date_from_date, date_to_date, date_exact_bill_date=None,
+    str_utility_category_name=None, uuid_unit_id=None, date_bill_date_from=None, date_bill_date_to=None,
+):
     """Bill-level WHERE fragments over the `FROM bill JOIN account_master am` base.
 
     date_exact_bill_date: when set (Daily flag), filters bill.bill_date = that date.
-    date_from_date / date_to_date: when set, filter bill.billing_period as a range.
+    date_from_date / date_to_date: when set, filter bill.billing_period as a range (day_flag).
+    date_bill_date_from / date_bill_date_to: when set, filter bill.bill_date as a range
+        (from_date/to_date) -- mutually exclusive with day_flag at the caller level.
     str_utility_category_name: when set, filters am.utility_category_name (case-insensitive).
     uuid_unit_id: when set, restricts to bills that have a bill_unit_details allocation row
         for that unit -- this base has no bud join, so it's expressed as an EXISTS subquery.
@@ -337,15 +342,26 @@ def _bill_where(uuid_account_id, str_bill_status, date_from_date, date_to_date, 
         if date_to_date:
             clauses.append("bill.billing_period <= %s")
             values.append(date_to_date)
+    if date_bill_date_from:
+        clauses.append("bill.bill_date >= %s")
+        values.append(date_bill_date_from)
+    if date_bill_date_to:
+        clauses.append("bill.bill_date <= %s")
+        values.append(date_bill_date_to)
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     return where_sql, values
 
 
-def _alloc_where(uuid_account_id, str_bill_status, date_from_date, date_to_date, date_exact_bill_date=None, str_utility_category_name=None, uuid_unit_id=None):
+def _alloc_where(
+    uuid_account_id, str_bill_status, date_from_date, date_to_date, date_exact_bill_date=None,
+    str_utility_category_name=None, uuid_unit_id=None, date_bill_date_from=None, date_bill_date_to=None,
+):
     """Allocation-level WHERE fragments over the bill_unit_details (bud) join base.
 
     date_exact_bill_date: when set (Daily flag), filters bill.bill_date = that date.
-    date_from_date / date_to_date: when set, filter bill.billing_period as a range.
+    date_from_date / date_to_date: when set, filter bill.billing_period as a range (day_flag).
+    date_bill_date_from / date_bill_date_to: when set, filter bill.bill_date as a range
+        (from_date/to_date) -- mutually exclusive with day_flag at the caller level.
     str_utility_category_name: when set, filters am.utility_category_name (case-insensitive).
     uuid_unit_id: when set, filters bud.unit_id directly since this base already joins bud.
     """
@@ -374,6 +390,12 @@ def _alloc_where(uuid_account_id, str_bill_status, date_from_date, date_to_date,
         if date_to_date:
             clauses.append("bill.billing_period <= %s")
             values.append(date_to_date)
+    if date_bill_date_from:
+        clauses.append("bill.bill_date >= %s")
+        values.append(date_bill_date_from)
+    if date_bill_date_to:
+        clauses.append("bill.bill_date <= %s")
+        values.append(date_bill_date_to)
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     return where_sql, values
 
@@ -387,6 +409,8 @@ def f_get_bill_summary_details(
     uuid_unit_id=None,
     str_day_flag=None,
     str_day_value=None,
+    str_date_from=None,
+    str_date_to=None,
     list_group_by=None,
 ):
     """Consolidated, LLM-facing summary of the bill domain -- the counterpart to the reference
@@ -395,6 +419,13 @@ def f_get_bill_summary_details(
     additionally returns a `grouped_results` array over the caller-chosen dimensions, same as the
     reference's group_by. Intended to be fetched by the chatbot backend and handed to the LLM as
     grounding context so it can answer open-ended bill questions.
+
+    str_date_from / str_date_to : str, optional
+        Arbitrary date range (any format dateutil can parse, e.g. "DD-MM-YYYY" or ISO), filtered
+        against bill.bill_date (the actual transaction date), NOT billing_period. Either bound may
+        be supplied alone for an open-ended range. Mutually exclusive with day_flag/day_value --
+        supplying both is rejected as invalid input, since the two describe the period two
+        different ways.
 
     str_utility_category_name : str, optional
         When supplied, restricts all sections to bills whose account belongs to the given utility
@@ -447,6 +478,29 @@ def f_get_bill_summary_details(
         parsed_date_to = None
         use_bill_date = False     # True only for Daily -- filters bill.bill_date instead of billing_period
         day_flag_applied = None   # stored for filters_applied echo
+
+        # 1b. Resolve arbitrary bill_date range via from_date/to_date (optional, mutually
+        # exclusive with day_flag -- the two express the same concept two different ways).
+        parsed_range_from = None
+        parsed_range_to = None
+        if str_date_from or str_date_to:
+            if str_day_flag:
+                return (
+                    config.STATUS_INVALID_INPUT,
+                    config.DESC_INVALID_INPUT,
+                    "from_date/to_date cannot be combined with day_flag/day_value.",
+                    None,
+                )
+            if str_date_from:
+                parsed_range_from = _parse_date(str_date_from)
+                if parsed_range_from is None:
+                    return config.STATUS_INVALID_INPUT, config.DESC_INVALID_INPUT, "Invalid from_date.", None
+            if str_date_to:
+                parsed_range_to = _parse_date(str_date_to)
+                if parsed_range_to is None:
+                    return config.STATUS_INVALID_INPUT, config.DESC_INVALID_INPUT, "Invalid to_date.", None
+            if parsed_range_from and parsed_range_to and parsed_range_from > parsed_range_to:
+                return config.STATUS_INVALID_INPUT, config.DESC_INVALID_INPUT, "from_date must not be after to_date.", None
 
         if str_day_flag:
             try:
@@ -526,10 +580,12 @@ def f_get_bill_summary_details(
             bill_where, bill_values = _bill_where(
                 uuid_account_id, str_bill_status, bp_from, bp_to, exact_bill_date,
                 str_utility_category_name, uuid_unit_id,
+                date_bill_date_from=parsed_range_from, date_bill_date_to=parsed_range_to,
             )
             alloc_where, alloc_values = _alloc_where(
                 uuid_account_id, str_bill_status, bp_from, bp_to, exact_bill_date,
                 str_utility_category_name, uuid_unit_id,
+                date_bill_date_from=parsed_range_from, date_bill_date_to=parsed_range_to,
             )
             bill_base = "FROM bill JOIN account_master am ON bill.account_id = am.account_id"
             alloc_base = """
@@ -779,6 +835,9 @@ def f_get_bill_summary_details(
                 "start": _iso(parsed_date_from),
                 "end": _iso(parsed_date_to),
             }
+        if parsed_range_from or parsed_range_to:
+            filters_applied["from_date"] = _iso(parsed_range_from)
+            filters_applied["to_date"] = _iso(parsed_range_to)
 
         # No STATUS_NO_DATA_FOUND: an empty/all-zero summary is a valid 200 answer for the LLM.
         response_body = {

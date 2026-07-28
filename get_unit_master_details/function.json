@@ -8,7 +8,8 @@
       "name": "req",
       "methods": [
         "get"
-      ]
+      ],
+      "route": "get_unit_master_details"
     },
     {
       "type": "http",

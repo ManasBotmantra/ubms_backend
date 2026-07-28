@@ -2,6 +2,8 @@
 
 import azure.functions as func
 
+import urllib.parse
+
 from common_functions.auth import validate_auth_token, token_has_scope, SCOPE_READ
 from common_functions.audit import log_api_audit_trail
 from common_functions.response import build_api_response, build_insufficient_scope_response, handle_system_exception
@@ -48,11 +50,19 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             log_api_audit_trail("get_category_master_details", uuid_caller_user_id, request_body, None, response.status_code)
             return response
 
-        # 2. Extract optional filter from query params only (GET — no body)
-        str_category = (
-            req.params.get("category")
-            or req.params.get("utility_category_name")
-        )
+        # 2. Extract optional filter from query params (GET — no body)
+        # Parse query string to handle repeated keys (?category=A&category=B) and comma-separated values (?category=A,B)
+        query_params = urllib.parse.parse_qs(urllib.parse.urlparse(req.url).query)
+        str_category = None
+        for key in ("category", "utility_category_name"):
+            if key in query_params:
+                raw_values = query_params[key]
+                items = []
+                for val in raw_values:
+                    items.extend([x.strip() for x in val.split(",") if x.strip()])
+                if items:
+                    str_category = items
+                    break
 
         # 3. RBAC check: Administrator, Leadership, Unit Accountant allowed
         if str_caller_role not in ("Administrator", "Leadership", "Unit Accountant"):

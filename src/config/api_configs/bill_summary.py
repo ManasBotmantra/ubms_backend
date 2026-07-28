@@ -177,6 +177,28 @@ BILL_SUMMARY_CONFIG = ApiConfig(
                     "the API to reject the request."
                 ),
             ),
+            "from_date": FilterFieldConfig(
+                type="string",
+                required=False,
+                description=(
+                    "Start of an arbitrary date range (format 'DD-MM-YYYY'), filtered against the "
+                    "actual bill transaction date (bill_date), NOT billing_period. Use this ONLY "
+                    "when the user asks for a custom range spanning multiple months/quarters that "
+                    "day_flag/day_value cannot express (e.g. 'between 15 Jan 2025 and 10 March "
+                    "2025'). MUST NOT be combined with day_flag/day_value -- the API rejects the "
+                    "request if both are set. May be supplied alone (open-ended range) with just "
+                    "to_date, or vice versa."
+                ),
+            ),
+            "to_date": FilterFieldConfig(
+                type="string",
+                required=False,
+                description=(
+                    "End of an arbitrary date range (format 'DD-MM-YYYY'), filtered against the "
+                    "actual bill transaction date (bill_date), NOT billing_period. Pairs with "
+                    "from_date -- see its description. MUST NOT be combined with day_flag/day_value."
+                ),
+            ),
         },
         group_by=GroupByConfig(
             allowed=[
@@ -216,15 +238,22 @@ BILL_SUMMARY_CONFIG = ApiConfig(
   - Combinations are valid, e.g. "monthly by status" -> ["month", "bill_status"]
 """,
         date_range_rules="""
-- Only set day_flag/day_value when the user actually mentions a period. If no period is
-  mentioned, OMIT both entirely for an all-time summary -- do not default to "last 30 days".
+- Only set a date filter when the user actually mentions a period. If no period is
+  mentioned, OMIT all of day_flag/day_value/from_date/to_date for an all-time summary --
+  do not default to "last 30 days".
 - A specific single day (e.g. "on 5 March 2025") -> day_flag="Daily", day_value="DD-MM-YYYY"
 - "this month" / "last month" / a named month (e.g. "March 2025") -> day_flag="Monthly",
   day_value="MM-YYYY" (resolve "this/last month" relative to the current datetime)
 - "Q1 2025" / "first quarter of 2025" -> day_flag="Quarterly", day_value="Q<1-4>-YYYY"
 - "this year" / "last year" / "in 2025" -> day_flag="Yearly", day_value="YYYY"
-- Always double-check the format matches day_flag exactly -- an invalid day_value format
-  causes the API to reject the whole request.
+- A CUSTOM RANGE that doesn't align to a single day/month/quarter/year (e.g. "between 15 Jan
+  2025 and 10 March 2025", "from March to July 2025", "last 45 days") -> use from_date/to_date
+  instead (format 'DD-MM-YYYY' each), and do NOT set day_flag/day_value. Either bound may be
+  omitted for an open-ended range (e.g. only from_date -> "since 1 Jan 2025").
+- NEVER set both day_flag/day_value AND from_date/to_date together -- the API rejects the
+  request if both are present. Pick exactly one way to express the period.
+- Always double-check the format matches exactly -- an invalid day_value/from_date/to_date
+  format causes the API to reject the whole request.
 """,
         decision_rules_extra="""
 - NEEDS FETCH = TRUE whenever the user asks about bills, spend, dues/pending amounts,
