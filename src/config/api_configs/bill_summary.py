@@ -241,15 +241,12 @@ BILL_SUMMARY_CONFIG = ApiConfig(
 - Only set a date filter when the user actually mentions a period. If no period is
   mentioned, OMIT all of day_flag/day_value/from_date/to_date for an all-time summary --
   do not default to "last 30 days".
-- A specific single day (e.g. "on 5 March 2025") -> day_flag="Daily", day_value="DD-MM-YYYY"
-- "this month" / "last month" / a named month (e.g. "March 2025") -> day_flag="Monthly",
-  day_value="MM-YYYY" (resolve "this/last month" relative to the current datetime)
+- A specific SINGLE day (e.g. "on 5 March 2025") -> day_flag="Daily", day_value="DD-MM-YYYY"
+- A specific SINGLE month: "this month" / "last month" / a named month (e.g. "March 2025") -> day_flag="Monthly",
+  day_value="MM-YYYY" (resolve "this/last month" relative to the current datetime). NEVER use day_flag="Monthly" for multi-month ranges like "last 6 months"!
 - "Q1 2025" / "first quarter of 2025" -> day_flag="Quarterly", day_value="Q<1-4>-YYYY"
 - "this year" / "last year" / "in 2025" -> day_flag="Yearly", day_value="YYYY"
-- A CUSTOM RANGE that doesn't align to a single day/month/quarter/year (e.g. "between 15 Jan
-  2025 and 10 March 2025", "from March to July 2025", "last 45 days") -> use from_date/to_date
-  instead (format 'DD-MM-YYYY' each), and do NOT set day_flag/day_value. Either bound may be
-  omitted for an open-ended range (e.g. only from_date -> "since 1 Jan 2025").
+- A MULTI-MONTH OR CUSTOM RANGE (e.g. "last 6 months", "last 3 months", "past 6 months", "between 15 Jan 2025 and 10 March 2025", "from March to July 2025", "last 45 days") -> MUST use from_date/to_date instead (format 'DD-MM-YYYY' each, e.g. for last 6 months from July 2026: from_date='01-02-2026', to_date='31-07-2026'), and do NOT set day_flag/day_value. Either bound may be omitted for an open-ended range (e.g. only from_date -> "since 1 Jan 2025").
 - NEVER set both day_flag/day_value AND from_date/to_date together -- the API rejects the
   request if both are present. Pick exactly one way to express the period.
 - CALENDAR VALIDITY & LEAP YEARS: Always check calendar validity when outputting dates!
