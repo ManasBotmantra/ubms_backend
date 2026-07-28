@@ -100,6 +100,9 @@ class SQLGenerator:
         """
         logger.info(f"Generating SQL for query: {intent}")
 
+        if metadata is None:
+            raise ValueError("Cannot generate SQL: no dataset metadata is available (dataset not loaded).")
+
         table_names = list(metadata.schema_info.keys())
 
         history_context = ""

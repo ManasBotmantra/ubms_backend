@@ -1018,3 +1018,130 @@ def f_get_unit_and_category_master(
         return config.STATUS_INTERNAL_SYSTEM_EXCEPTION, config.DESC_SYSTEM_EXCEPTION, str(ex), None
 
 
+def f_get_unit_master_details(
+    uuid_caller_user_id,
+    str_caller_role,
+    str_unit_name=None,
+):
+    """
+    Returns active unit master records.
+    Sending no filter returns all active units.
+    Sending str_unit_name filters by unit_name, unit_code, or unit_id (partial match).
+    Unit Accountants are scoped to their assigned units.
+    """
+    try:
+        # 1. RBAC check
+        if str_caller_role not in ("Administrator", "Leadership", "Unit Accountant"):
+            return config.STATUS_AUTHORIZATION_FAILURE, config.DESC_AUTHORIZATION_FAILURE, config.ERR_ROLE_NOT_PERMITTED, None
+
+        with get_db_cursor() as cursor:
+            # 2. Scope Unit Accountant to assigned units
+            assigned_unit_ids = None
+            if str_caller_role == "Unit Accountant":
+                cursor.execute(
+                    "SELECT unit_id FROM user_unit_details WHERE user_id = %s AND assignment_status = 'Active'",
+                    (uuid_caller_user_id,),
+                )
+                assigned_unit_ids = [row["unit_id"] for row in cursor.fetchall()]
+                if not assigned_unit_ids:
+                    return config.STATUS_SUCCESS, config.DESC_SUCCESS, "", {"units": [], "total_units": 0}
+
+            # 3. Build WHERE clause
+            where_clauses = ["unit_status = 'Active'"]
+            values = []
+
+            if assigned_unit_ids is not None:
+                where_clauses.append("unit_id = ANY(%s)")
+                values.append(assigned_unit_ids)
+
+            unit_name_list = []
+            if isinstance(str_unit_name, (list, tuple, set)):
+                unit_name_list = [str(x).strip() for x in str_unit_name if x and str(x).strip()]
+            elif str_unit_name and str(str_unit_name).strip():
+                unit_name_list = [str(str_unit_name).strip()]
+
+            if unit_name_list:
+                or_clauses = [
+                    "(unit_name ILIKE %s OR unit_code ILIKE %s OR CAST(unit_id AS TEXT) ILIKE %s)"
+                    for _ in unit_name_list
+                ]
+                where_clauses.append(f"({' OR '.join(or_clauses)})")
+                for u in unit_name_list:
+                    val = f"%{u}%"
+                    values.extend([val, val, val])
+
+            where_sql = f"WHERE {' AND '.join(where_clauses)}"
+            cursor.execute(
+                f"""
+                SELECT unit_id, unit_code, unit_name, address, unit_status
+                FROM unit_master
+                {where_sql}
+                ORDER BY unit_name ASC
+                """,
+                tuple(values),
+            )
+            units = cursor.fetchall()
+
+        return (
+            config.STATUS_SUCCESS,
+            config.DESC_SUCCESS,
+            "",
+            {"units": units, "total_units": len(units)},
+        )
+
+    except Exception as ex:
+        return config.STATUS_INTERNAL_SYSTEM_EXCEPTION, config.DESC_SYSTEM_EXCEPTION, str(ex), None
+
+
+def f_get_category_master_details(
+    uuid_caller_user_id,
+    str_caller_role,
+    str_category=None,
+):
+    """
+    Returns distinct active utility category names from account_master.
+    Sending no filter returns all active categories.
+    Sending str_category filters by utility_category_name (partial match).
+    """
+    try:
+        # 1. RBAC check
+        if str_caller_role not in ("Administrator", "Leadership", "Unit Accountant"):
+            return config.STATUS_AUTHORIZATION_FAILURE, config.DESC_AUTHORIZATION_FAILURE, config.ERR_ROLE_NOT_PERMITTED, None
+
+        with get_db_cursor() as cursor:
+            # 2. Build WHERE clause
+            where_clauses = ["account_status = 'Active'", "utility_category_name IS NOT NULL"]
+            values = []
+
+            category_list = []
+            if isinstance(str_category, (list, tuple, set)):
+                category_list = [str(x).strip() for x in str_category if x and str(x).strip()]
+            elif str_category and str(str_category).strip():
+                category_list = [str(str_category).strip()]
+
+            if category_list:
+                or_clauses = ["utility_category_name ILIKE %s" for _ in category_list]
+                where_clauses.append(f"({' OR '.join(or_clauses)})")
+                values.extend([f"%{c}%" for c in category_list])
+
+            where_sql = f"WHERE {' AND '.join(where_clauses)}"
+            cursor.execute(
+                f"""
+                SELECT DISTINCT utility_category_name AS category
+                FROM account_master
+                {where_sql}
+                ORDER BY category ASC
+                """,
+                tuple(values),
+            )
+            categories = [row["category"] for row in cursor.fetchall()]
+
+        return (
+            config.STATUS_SUCCESS,
+            config.DESC_SUCCESS,
+            "",
+            {"categories": categories, "total_categories": len(categories)},
+        )
+
+    except Exception as ex:
+        return config.STATUS_INTERNAL_SYSTEM_EXCEPTION, config.DESC_SYSTEM_EXCEPTION, str(ex), None

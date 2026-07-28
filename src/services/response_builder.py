@@ -193,6 +193,15 @@ class ResponseBuilder:
                     )
 
                 # Phase 4a: Generate SQL
+                # Guard: if metadata is None no dataset is loaded — SQL generation would
+                # crash on metadata.schema_info. Surface a friendly message instead.
+                if metadata is None:
+                    logger.warning("process_single_block: metadata is None, skipping SQL generation")
+                    return Block(
+                        type=BlockType.MARKDOWN,
+                        title=b_title or "No Data",
+                        data="No data has been loaded yet. Please ask a question about your bills or spending and the assistant will fetch the data automatically.",
+                    )
                 sql_query = await self.sql_generator.generate_sql(b_intent, metadata, chat_history)
 
                 # Phase 4b: Execute SQL
