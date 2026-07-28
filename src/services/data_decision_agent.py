@@ -9,6 +9,7 @@ from the active ApiConfig. No hardcoded transaction-log-specific fields here.
 
 This is a stateless component — all context comes in via the arguments.
 """
+import calendar
 import json
 import datetime
 from typing import List, Optional
@@ -17,6 +18,40 @@ from src.config.base import ApiConfig
 from src.domain.interfaces import ILLMClient
 from src.domain.models import ChatMessage, DataDecision, DatasetMetadata
 from src.core.logger import logger
+
+
+def _sanitize_date_string(date_str: str) -> str:
+    """Validates and fixes invalid calendar dates (e.g. 29-02-2026 -> 28-02-2026)."""
+    if not isinstance(date_str, str) or not date_str.strip():
+        return date_str
+
+    s = date_str.strip()
+    parts = s.split("-")
+    if len(parts) == 3:
+        try:
+            # Format could be DD-MM-YYYY or YYYY-MM-DD
+            if len(parts[0]) == 4:
+                year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
+                fmt = "ISO"
+            else:
+                day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
+                fmt = "DD-MM-YYYY"
+
+            if 1 <= month <= 12 and year > 1900:
+                _, max_days = calendar.monthrange(year, month)
+                if day > max_days:
+                    logger.warning(
+                        f"Clamping invalid date day {day} for month {month}/{year} to max valid day {max_days}"
+                    )
+                    day = max_days
+
+                if fmt == "ISO":
+                    return f"{year:04d}-{month:02d}-{day:02d}"
+                else:
+                    return f"{day:02d}-{month:02d}-{year:04d}"
+        except Exception:
+            pass
+    return date_str
 
 
 def _build_filter_schema_block(api_config: ApiConfig) -> str:
@@ -324,6 +359,11 @@ When needs_fetch=false:
                         v for v in [str(v).upper() for v in raw_vals]
                         if v in [a.upper() for a in field_cfg.allowed_values]
                     ]
+
+        # Sanitize any date-like string filter values (from_date, to_date, day_value)
+        for date_field in ("from_date", "to_date", "day_value"):
+            if date_field in cleaned_filters and isinstance(cleaned_filters[date_field], str):
+                cleaned_filters[date_field] = _sanitize_date_string(cleaned_filters[date_field])
 
         # Apply defaults for fields the LLM omitted (replaces Pydantic model defaults)
         cleaned_filters = self._apply_filter_defaults(cleaned_filters)

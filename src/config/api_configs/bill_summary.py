@@ -252,6 +252,8 @@ BILL_SUMMARY_CONFIG = ApiConfig(
   omitted for an open-ended range (e.g. only from_date -> "since 1 Jan 2025").
 - NEVER set both day_flag/day_value AND from_date/to_date together -- the API rejects the
   request if both are present. Pick exactly one way to express the period.
+- CALENDAR VALIDITY & LEAP YEARS: Always check calendar validity when outputting dates!
+  February has only 28 days in non-leap years (e.g. 2025, 2026, 2027). Only leap years (divisible by 4, e.g. 2024, 2028) have 29 days in February. Never output '29-02-2026' or '31-04-YYYY' or '31-06-YYYY'.
 - Always double-check the format matches exactly -- an invalid day_value/from_date/to_date
   format causes the API to reject the whole request.
 """,
