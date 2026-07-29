@@ -26,7 +26,7 @@ DEFAULT_CURRENCY = "AED"
 
 # OQ-001 (workbook template pending stakeholder confirmation): the parser assumes a
 # single-sheet workbook whose header row contains these column names (case-insensitive).
-EXPECTED_COLUMNS = ("account_number", "billing_period", "bill_date", "total_amount")
+EXPECTED_COLUMNS = ("account_number", "billing_period", "bill_date", "total_amount", "due_date")
 
 
 def _is_valid_uuid(value):
@@ -167,6 +167,8 @@ def f_upload_bulk_upload_batch(uuid_caller_user_id, str_caller_role, str_file_na
                     billing_period = row.get("billing_period")
                     bill_date = row.get("bill_date")
                     total_amount = row.get("total_amount")
+                    due_date_raw = row.get("due_date")
+                    due_date = _parse_date(due_date_raw) if due_date_raw not in (None, "") else None
 
                     if not account_number or total_amount in (None, ""):
                         cursor.execute("ROLLBACK TO SAVEPOINT row_savepoint")
@@ -192,8 +194,8 @@ def f_upload_bulk_upload_batch(uuid_caller_user_id, str_caller_role, str_file_na
                         """
                         INSERT INTO bill
                             (bill_id, batch_id, account_id, billing_period, bill_date,
-                             total_amount, currency, bill_status, created_by, created_on)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             due_date, total_amount, currency, bill_status, created_by, created_on)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             bill_id,
@@ -201,6 +203,7 @@ def f_upload_bulk_upload_batch(uuid_caller_user_id, str_caller_role, str_file_na
                             uuid_account_id,
                             billing_period,
                             bill_date,
+                            due_date,
                             total_amount,
                             DEFAULT_CURRENCY,
                             "Pending Approval",
