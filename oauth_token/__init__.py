@@ -1,9 +1,13 @@
-"""Azure Function implementing the OAuth 2.0 Token Endpoint (RFC 6749).
+"""Azure Function implementing the OAuth 2.1 Token Endpoint.
 
-Supported grants:
+Supported grants (OAuth 2.1 compliant):
 - authorization_code : code + code_verifier (PKCE, mandatory) -> access + refresh token
-- password (ROPC)    : username/email + password             -> access + refresh token
 - refresh_token      : refresh_token                          -> rotated token pair
+
+The Resource Owner Password Credentials (ROPC / grant_type=password) grant has been
+removed in accordance with OAuth 2.1. Clients that previously used it must migrate to
+authorization_code + PKCE for interactive flows, or use a client_credentials grant
+(not yet implemented) for machine-to-machine scenarios.
 
 Security notes -- these are deliberate:
 
@@ -18,9 +22,6 @@ Security notes -- these are deliberate:
   caller. Details go to the server logger instead.
 - The audit payload is filtered before logging: see common_functions/audit.py, which
   now also redacts code, code_verifier and client_secret.
-- ROPC (grant_type=password) is retained for the existing first-party login flow, but
-  is restricted to clients explicitly registered for it. It is a deprecated grant
-  (OAuth 2.1 removes it) -- new integrations should use authorization_code + PKCE.
 """
 
 import base64
@@ -32,7 +33,6 @@ import urllib.parse
 import azure.functions as func
 
 from admin_functions.auth_session import (
-    f_create_auth_session,
     f_create_session_for_user,
     f_refresh_auth_session,
 )
@@ -44,7 +44,7 @@ from admin_functions.oauth_db import (
     verify_client_secret,
 )
 from common_functions.audit import log_api_audit_trail
-from common_functions.auth import SCOPE_READ, parse_scope
+from common_functions.auth import parse_scope
 from common_functions import config
 
 logger = logging.getLogger("oauth_token")
@@ -146,10 +146,12 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     params = _parse_request_params(req)
     grant_type = params.get("grant_type")
 
-    if grant_type not in ("authorization_code", "password", "refresh_token"):
+    if grant_type not in ("authorization_code", "refresh_token"):
         return _error(
             "unsupported_grant_type",
-            "grant_type must be one of: authorization_code, password, refresh_token.",
+            "grant_type must be one of: authorization_code, refresh_token. "
+            "The password grant has been removed (OAuth 2.1). "
+            "Use authorization_code + PKCE for interactive flows.",
             400,
             params,
         )
@@ -231,40 +233,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             log_api_audit_trail("oauth_token", user_id, params, json_body, 200)
             return _build_oauth_response(200, json_body)
 
-        # ---- Grant 2: password (ROPC) --------------------------------------
-        elif grant_type == "password":
-            email = params.get("username") or params.get("email")
-            password = params.get("password")
-
-            if not email or not password:
-                return _error(
-                    "invalid_request",
-                    "username (or email) and password are required.",
-                    400,
-                    params,
-                )
-
-            # Honour the requested scope; absent one, default to read-only. A
-            # password-grant client is typically a script or agent, and defaulting
-            # those to full write access is not a good failure mode.
-            requested = parse_scope(params.get("scope")) or frozenset({SCOPE_READ})
-
-            int_status, _desc, _err, json_body = f_create_auth_session(
-                email, password, requested_scopes=requested, client_id=client_id
-            )
-
-            if int_status == config.STATUS_SUCCESS and json_body:
-                log_api_audit_trail("oauth_token", None, params, json_body, 200)
-                return _build_oauth_response(200, json_body)
-
-            if int_status == config.STATUS_INTERNAL_SYSTEM_EXCEPTION:
-                logger.error("oauth_token: system exception during password grant")
-                return _error("server_error", "Unable to process the request.", 500, params)
-
-            # Fixed message -- never distinguish "no such user" from "wrong password".
-            return _error("invalid_grant", config.ERR_INVALID_CREDENTIALS, 400, params)
-
-        # ---- Grant 3: refresh_token ----------------------------------------
+        # ---- Grant 2: refresh_token ----------------------------------------
         else:
             refresh_token = params.get("refresh_token")
 

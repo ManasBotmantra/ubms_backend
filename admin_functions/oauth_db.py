@@ -1,4 +1,4 @@
-"""Database helper functions for OAuth 2.0 Authorization Server (clients, auth codes, PKCE).
+"""Database helper functions for OAuth 2.1 Authorization Server (clients, auth codes, PKCE).
 
 Security posture -- these are deliberate, load-bearing choices:
 

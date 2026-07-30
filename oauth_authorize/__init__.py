@@ -1,10 +1,10 @@
-"""Azure Function implementing the OAuth 2.0 Authorization Endpoint (/oauth/authorize).
+"""Azure Function implementing the OAuth 2.1 Authorization Endpoint (/oauth/authorize).
 
 Flow:
 1. Validate response_type, client_id, redirect_uri and PKCE parameters.
 2. Authenticate the resource owner (login form, or an Authorization: Bearer header).
 3. Obtain explicit consent.
-4. Redirect to the *registered* redirect_uri with ?code=...&state=...
+4. Redirect to the *registered* redirect_uri with ?code=...&state=...&iss=...
 
 Security notes -- these are deliberate:
 
@@ -18,12 +18,15 @@ Security notes -- these are deliberate:
   parameter. Tokens in URLs end up in Application Insights, proxy logs, and the
   Referer header sent to the redirect target.
 - Codes are issued only on an explicit POST carrying consent -- never silently on GET.
+- `iss` (issuer identifier) is appended to every authorization response redirect per
+  RFC 9207, protecting clients against AS mix-up attacks.
 - Everything interpolated into the HTML is escaped.
 """
 
 import html
 import json
 import logging
+import os
 import urllib.parse
 
 import azure.functions as func
@@ -168,6 +171,26 @@ button:hover {
 """
 
 
+def _get_issuer(req: func.HttpRequest) -> str:
+    """Resolves the issuer identifier (RFC 8414 s2 / RFC 9207).
+
+    Prefers the BASE_URL environment variable (set in Application Settings).
+    Falls back to deriving it from the inbound request URL so that local
+    development (func start) works without extra configuration.
+    """
+    base_url = os.environ.get("BASE_URL", "")
+    if base_url:
+        # Strip a trailing /api suffix if present -- the issuer is the root URL.
+        return base_url[:-4] if base_url.endswith("/api") else base_url
+    # Derive from request: strip the path, keeping scheme://host[:port]
+    req_url = req.url or ""
+    parts = req_url.split("/.well-known/")
+    if len(parts) == 1:
+        # Not a well-known URL; strip at /api/
+        parts = req_url.split("/api/")
+    return parts[0].rstrip("/") if parts else ""
+
+
 def _forwarded_query(params: dict) -> str:
     """Builds the form-action query string from allowlisted parameters only."""
     return urllib.parse.urlencode(
@@ -304,12 +327,14 @@ def _parse_params(req: func.HttpRequest) -> dict:
     return params
 
 
-def _build_redirect(redirect_uri: str, code: str, state: str) -> str:
-    """Appends code (and state) to an already-validated redirect_uri."""
+def _build_redirect(redirect_uri: str, code: str, state: str, issuer: str = "") -> str:
+    """Appends code, state, and iss (RFC 9207) to an already-validated redirect_uri."""
     delimiter = "&" if "?" in redirect_uri else "?"
     target = f"{redirect_uri}{delimiter}code={urllib.parse.quote(code, safe='')}"
     if state:
         target += f"&state={urllib.parse.quote(state, safe='')}"
+    if issuer:
+        target += f"&iss={urllib.parse.quote(issuer, safe='')}"
     return target
 
 
@@ -317,6 +342,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     if req.method == "OPTIONS":
         return func.HttpResponse("", status_code=204, headers=BASE_HEADERS)
 
+    issuer = _get_issuer(req)
     params = _parse_params(req)
 
     client_id = params.get("client_id")
@@ -471,7 +497,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             503,
         )
 
-    target_redirect = _build_redirect(redirect_uri, auth_code, state)
+    target_redirect = _build_redirect(redirect_uri, auth_code, state, issuer)
 
     headers = dict(BASE_HEADERS)
     headers["Location"] = target_redirect

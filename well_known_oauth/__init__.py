@@ -1,4 +1,4 @@
-"""Azure Function returning OAuth 2.0 Authorization Server Metadata (RFC 8414 / OIDC discovery)."""
+"""Azure Function returning OAuth 2.1 Authorization Server Metadata (RFC 8414 / RFC 9700)."""
 
 import json
 import os
@@ -45,7 +45,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         "revocation_endpoint": f"{api_base}/oauth/revoke",
         "jwks_uri": f"{api_base}/.well-known/jwks.json",
         "response_types_supported": ["code"],
-        "grant_types_supported": ["authorization_code", "password", "refresh_token"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
         "token_endpoint_auth_methods_supported": [
             "client_secret_basic",
             "client_secret_post",
