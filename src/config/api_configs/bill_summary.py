@@ -181,22 +181,23 @@ BILL_SUMMARY_CONFIG = ApiConfig(
                 type="string",
                 required=False,
                 description=(
-                    "Start of an arbitrary date range (format 'DD-MM-YYYY'), filtered against the "
-                    "actual bill transaction date (bill_date), NOT billing_period. Use this ONLY "
-                    "when the user asks for a custom range spanning multiple months/quarters that "
-                    "day_flag/day_value cannot express (e.g. 'between 15 Jan 2025 and 10 March "
-                    "2025'). MUST NOT be combined with day_flag/day_value -- the API rejects the "
-                    "request if both are set. May be supplied alone (open-ended range) with just "
-                    "to_date, or vice versa."
+                    "Start of an arbitrary date range (format 'DD-MM-YYYY'), filtered against "
+                    "billing_period (the bill's month), NOT bill_date -- this keeps the range "
+                    "consistent with the monthly_trend breakdown, which is grouped by billing_period. "
+                    "Use this ONLY when the user asks for a custom range spanning multiple "
+                    "months/quarters that day_flag/day_value cannot express (e.g. 'between 15 Jan "
+                    "2025 and 10 March 2025'). MUST NOT be combined with day_flag/day_value -- the "
+                    "API rejects the request if both are set. May be supplied alone (open-ended "
+                    "range) with just to_date, or vice versa."
                 ),
             ),
             "to_date": FilterFieldConfig(
                 type="string",
                 required=False,
                 description=(
-                    "End of an arbitrary date range (format 'DD-MM-YYYY'), filtered against the "
-                    "actual bill transaction date (bill_date), NOT billing_period. Pairs with "
-                    "from_date -- see its description. MUST NOT be combined with day_flag/day_value."
+                    "End of an arbitrary date range (format 'DD-MM-YYYY'), filtered against "
+                    "billing_period (the bill's month), NOT bill_date. Pairs with from_date -- see "
+                    "its description. MUST NOT be combined with day_flag/day_value."
                 ),
             ),
         },
@@ -246,7 +247,7 @@ BILL_SUMMARY_CONFIG = ApiConfig(
   day_value="MM-YYYY" (resolve "this/last month" relative to the current datetime). NEVER use day_flag="Monthly" for multi-month ranges like "last 6 months"!
 - "Q1 2025" / "first quarter of 2025" -> day_flag="Quarterly", day_value="Q<1-4>-YYYY"
 - "this year" / "last year" / "in 2025" -> day_flag="Yearly", day_value="YYYY"
-- A MULTI-MONTH OR CUSTOM RANGE (e.g. "last 6 months", "last 3 months", "past 6 months", "between 15 Jan 2025 and 10 March 2025", "from March to July 2025", "last 45 days") -> MUST use from_date/to_date instead (format 'YYYY-MM-DD' each, e.g. for last 6 months from July 2026: from_date='2026-02-01', to_date='2026-07-31'), and do NOT set day_flag/day_value. Either bound may be omitted for an open-ended range (e.g. only from_date -> "since 1 Jan 2025").
+- A MULTI-MONTH OR CUSTOM RANGE (e.g. "last 6 months", "last 3 months", "past 6 months", "between 15 Jan 2025 and 10 March 2025", "from March to July 2025", "last 45 days") -> MUST use from_date/to_date instead (format 'YYYY-MM-DD' each, e.g. for last 6 months computed from the CURRENT DATETIME above, not a fixed example date: from_date = first day of the month 5 months before the current month, to_date = last day of the current month), and do NOT set day_flag/day_value. Round from_date down to the 1st of its month and to_date up to the last day of its month -- from_date/to_date filter on billing_period (the bill's month), so full-month bounds keep the range aligned with whole calendar months instead of splitting one. Either bound may be omitted for an open-ended range (e.g. only from_date -> "since 1 Jan 2025").
 - NEVER set both day_flag/day_value AND from_date/to_date together -- the API rejects the
   request if both are present. Pick exactly one way to express the period.
 - CALENDAR VALIDITY & LEAP YEARS: Always check calendar validity when outputting dates!

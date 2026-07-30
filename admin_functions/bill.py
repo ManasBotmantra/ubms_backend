@@ -309,8 +309,11 @@ def _bill_where(
 
     date_exact_bill_date: when set (Daily flag), filters bill.bill_date = that date.
     date_from_date / date_to_date: when set, filter bill.billing_period as a range (day_flag).
-    date_bill_date_from / date_bill_date_to: when set, filter bill.bill_date as a range
-        (from_date/to_date) -- mutually exclusive with day_flag at the caller level.
+    date_bill_date_from / date_bill_date_to: when set, filter bill.billing_period as a range
+        (from_date/to_date) -- mutually exclusive with day_flag at the caller level. Filters on
+        billing_period rather than bill_date so this range lines up with the billing_period-based
+        monthly_trend grouping below -- a bill_date-based range could span a different set of
+        calendar months than what monthly_trend then displays.
     str_utility_category_name: when set, filters am.utility_category_name (case-insensitive).
     uuid_unit_id: when set, restricts to bills that have a bill_unit_details allocation row
         for that unit -- this base has no bud join, so it's expressed as an EXISTS subquery.
@@ -343,10 +346,10 @@ def _bill_where(
             clauses.append("bill.billing_period <= %s")
             values.append(date_to_date)
     if date_bill_date_from:
-        clauses.append("bill.bill_date >= %s")
+        clauses.append("bill.billing_period >= %s")
         values.append(date_bill_date_from)
     if date_bill_date_to:
-        clauses.append("bill.bill_date <= %s")
+        clauses.append("bill.billing_period <= %s")
         values.append(date_bill_date_to)
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     return where_sql, values
@@ -360,8 +363,11 @@ def _alloc_where(
 
     date_exact_bill_date: when set (Daily flag), filters bill.bill_date = that date.
     date_from_date / date_to_date: when set, filter bill.billing_period as a range (day_flag).
-    date_bill_date_from / date_bill_date_to: when set, filter bill.bill_date as a range
-        (from_date/to_date) -- mutually exclusive with day_flag at the caller level.
+    date_bill_date_from / date_bill_date_to: when set, filter bill.billing_period as a range
+        (from_date/to_date) -- mutually exclusive with day_flag at the caller level. Filters on
+        billing_period rather than bill_date so this range lines up with the billing_period-based
+        monthly_trend grouping below -- a bill_date-based range could span a different set of
+        calendar months than what monthly_trend then displays.
     str_utility_category_name: when set, filters am.utility_category_name (case-insensitive).
     uuid_unit_id: when set, filters bud.unit_id directly since this base already joins bud.
     """
@@ -391,10 +397,10 @@ def _alloc_where(
             clauses.append("bill.billing_period <= %s")
             values.append(date_to_date)
     if date_bill_date_from:
-        clauses.append("bill.bill_date >= %s")
+        clauses.append("bill.billing_period >= %s")
         values.append(date_bill_date_from)
     if date_bill_date_to:
-        clauses.append("bill.bill_date <= %s")
+        clauses.append("bill.billing_period <= %s")
         values.append(date_bill_date_to)
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     return where_sql, values
@@ -422,10 +428,13 @@ def f_get_bill_summary_details(
 
     str_date_from / str_date_to : str, optional
         Arbitrary date range (any format dateutil can parse, e.g. "DD-MM-YYYY" or ISO), filtered
-        against bill.bill_date (the actual transaction date), NOT billing_period. Either bound may
-        be supplied alone for an open-ended range. Mutually exclusive with day_flag/day_value --
-        supplying both is rejected as invalid input, since the two describe the period two
-        different ways.
+        against bill.billing_period, NOT bill.bill_date. Filtering on billing_period keeps this
+        range consistent with the monthly_trend section below, which is grouped by billing_period --
+        a bill_date-based range could include/exclude bills whose billing_period falls just outside
+        the requested window, producing a monthly_trend that doesn't match the requested range.
+        Either bound may be supplied alone for an open-ended range. Mutually exclusive with
+        day_flag/day_value -- supplying both is rejected as invalid input, since the two describe
+        the period two different ways.
 
     str_utility_category_name : str, optional
         When supplied, restricts all sections to bills whose account belongs to the given utility
